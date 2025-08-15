@@ -30,7 +30,6 @@ func (b *BrowserService) Run() error {
 		return fmt.Errorf("Ошибка запуска Chrome: %v", err)
 	}
 	time.Sleep(3 * time.Second) //ждем 3 секунды для открытия браузера
-	log.Printf("Chrome запущен с PID %s", cmd.String())
 	log.Printf("Chrome запущен с PID %d", cmd.Process.Pid)
 	return nil
 }
