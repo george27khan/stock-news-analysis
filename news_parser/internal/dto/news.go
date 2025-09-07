@@ -1,4 +1,4 @@
-package domain
+package dto
 
 import "time"
 
@@ -29,6 +29,7 @@ type Article struct {
 	UserLastName        string    `json:"userLastName"`
 	CompanyName         string    `json:"company_name"`
 	CompanyNamePrepared string    `json:"company_name_prepared"`
+	Pairs               Pairs     `json:"pais"`
 }
 
 type Pairs struct {

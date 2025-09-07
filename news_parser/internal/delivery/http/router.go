@@ -1,6 +1,8 @@
 package http
 
-import "stock-news-analysis/internal/service"
+import (
+	"stock-news-analysis/news_parser/internal/service"
+)
 
 func Run() {
 	parser := service.NewNewsParser()

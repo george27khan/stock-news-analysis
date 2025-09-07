@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
-	"stock-news-analysis/internal/delivery/http"
+	"stock-news-analysis/news_parser/internal/delivery/http"
 )
 
 // go tool pprof -http=:8083  cpu.out

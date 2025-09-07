@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
-	"stock-news-analysis/internal/domain"
+	"stock-news-analysis/news_parser/internal/domain"
 	"time"
 )
 
