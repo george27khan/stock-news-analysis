@@ -7,23 +7,26 @@ import (
 	"net/http"
 	"os/exec"
 	"stock-news-analysis/news_parser/internal/domain"
+	"stock-news-analysis/news_parser/internal/usecase"
 	"time"
 )
 
-type BrowserService struct {
-	Browser *domain.Browser
+var _ usecase.Browser = (*Browser)(nil)
+
+type Browser struct {
+	Info *domain.Browser
 }
 
-func NewBrowserChrome() *BrowserService {
+func NewBrowser() *Browser {
 	port := 9222
-	return &BrowserService{&domain.Browser{"127.0.0.1",
+	return &Browser{&domain.Browser{"127.0.0.1",
 		port,
 		`C:\Program Files\Google\Chrome\Application\chrome.exe`,
 		[]string{fmt.Sprintf("--remote-debugging-port=%d", port), `--user-data-dir=C:\temp\chrome-debug`}}}
 }
 
-func (b *BrowserService) Run() error {
-	cmd := exec.Command(b.Browser.ExePath, b.Browser.RunArgs...)
+func (b *Browser) Run() error {
+	cmd := exec.Command(b.Info.ExePath, b.Info.RunArgs...)
 	err := cmd.Start()
 	if err != nil {
 		log.Fatalf("Ошибка запуска Chrome: %v", err)
@@ -34,9 +37,9 @@ func (b *BrowserService) Run() error {
 	return nil
 }
 
-func (b *BrowserService) GetWebSocketDebuggerURL() (string, error) {
+func (b *Browser) GetURL() (string, error) {
 	var info map[string]interface{}
-	resp, err := http.Get(fmt.Sprintf("http://%s:%d/json/version", b.Browser.Host, b.Browser.Port))
+	resp, err := http.Get(fmt.Sprintf("http://%s:%d/json/version", b.Info.Host, b.Info.Port))
 	if err != nil {
 		log.Fatalf("Ошибка при запросе: %v", err)
 		return "", fmt.Errorf("Ошибка при запросе: %v", err)

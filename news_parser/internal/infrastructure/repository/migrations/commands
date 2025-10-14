@@ -1,0 +1,6 @@
+tern migrate
+tern migrate --destination -1
+tern new create_table_employee
+migrate -path news_parser/internal/infrastructure/repository/migrations -database "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" down -all
+
+migrate -path news_parser/internal/infrastructure/repository/migrations -database "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" up all
