@@ -11,4 +11,6 @@ go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@lat
 
 migrate create -ext sql -dir news_parser/internal/infrastructure/db/migrations -seq create_table
 
-migrate -path news_parser/internal/infrastructure/db/migrations -database "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" up 1
+migrate -path news_parser/internal/infrastructure/repository/migrations -database "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" up 1
+migrate -path ./news_parser/internal/infrastructure/repository/migrations -database "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" down 1
+

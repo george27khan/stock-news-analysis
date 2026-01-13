@@ -1,1 +1,1 @@
-drop table "news"
+drop table "news";

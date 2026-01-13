@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"stock-news-analysis/news_parser/internal/delivery/local"
 	"stock-news-analysis/news_parser/internal/infrastructure/browser"
+	"stock-news-analysis/news_parser/internal/infrastructure/cron"
 	"stock-news-analysis/news_parser/internal/infrastructure/parser/rod"
 	"stock-news-analysis/news_parser/internal/infrastructure/repository"
 	"stock-news-analysis/news_parser/internal/usecase"
@@ -15,13 +15,19 @@ func main() {
 	ctx := context.Background()
 	pool, err := repository.NewPostgresPool(ctx, "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
 	if err != nil {
-		return nil
+		return
 	}
 	rep := repository.NewNewsRepository(pool)
 	b := browser.NewBrowser()
 	parser := rod.NewNewsParser()
-	newsUsecase := usecase.NewNewsParserUseCase(b, parser)
-	newsUsecase.Parse()
+	newsUsecase := usecase.NewNewsParserUseCase(b, parser, rep)
+	//newsUsecase.Parse(ctx)
+
+	newsUsecase.Run(ctx) //запуск парсера
+	shed := cron.NewScheduler(newsUsecase.Parse, "0 */1 * * * *")
+	newsUsecase.Parse(ctx)
+	shed.Start(ctx)
+	select {}
 	// Профилирование CPU
 	//fcpu, err := os.Create("cpu.out")
 	//if err != nil {
@@ -31,7 +37,7 @@ func main() {
 	//defer pprof.StopCPUProfile()
 
 	// --- твой код ---
-	local.Run()
+	//local.Run()
 	// ----------------
 
 	// Профилирование памяти

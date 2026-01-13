@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"stock-news-analysis/news_parser/internal/domain"
 	"time"
@@ -15,18 +17,21 @@ type path struct {
 
 // var _ h.ArticleUseCase = (*ArticleUseCase)(nil)
 type Browser interface {
-	Run() error
-	GetURL() (string, error)
+	Run(ctx context.Context) error
+	Close() error
+	GetURL(ctx context.Context) (string, error)
 }
 
 type NewsParser interface {
-	Run(url string, timeout time.Duration)
+	Run(ctx context.Context, url string, timeout time.Duration)
 	Close()
-	Parse(url *url.URL) ([]domain.Article, error)
+	Parse(ctx context.Context, url *url.URL, lastDt time.Time) ([]domain.Article, error)
 }
 
 type NewsRepository interface {
 	Insert(ctx context.Context, article domain.Article) error
+	InsertBatch(ctx context.Context, article []domain.Article) error
+	GetLastArticleDt(ctx context.Context, path string) (time.Time, error)
 	Close()
 }
 
@@ -57,35 +62,71 @@ func NewNewsParserUseCase(b Browser, p NewsParser, r NewsRepository) *NewsParser
 	return &NewsParserUseCase{b, p, newsPath, url, r}
 }
 
-func (p *NewsParserUseCase) Parse() error {
-	start := time.Now()                     // запоминаем время старта
-	if err := p.Browser.Run(); err != nil { // запуск браузера
-		return err
+// Run запуск браузера и парсера
+func (p *NewsParserUseCase) Run(ctx context.Context) error {
+	if err := p.Browser.Run(ctx); err != nil { // запуск браузера
+		return fmt.Errorf("NewsParserUseCase browser run: %w", err)
 	}
-	url, err := p.Browser.GetURL() // получаем адрес браузера
+	//defer p.Browser.Close()
+	url, err := p.Browser.GetURL(ctx) // получаем адрес браузера
 	if err != nil {
-		return err
+		return fmt.Errorf("NewsParserUseCase GetURL: %w", err)
 	}
-	//fmt.Println("url ", url)
-	p.Parser.Run(url, 60*time.Second) //запуск парсера в браузере
-	defer p.Parser.Close()
+	p.Parser.Run(ctx, url, 500*time.Second) //запуск парсера в браузере, тут задается время жизни парсера !!!!!!!!
+	//defer p.Parser.Close()
+	return nil
+}
+
+// Stop остановка парсера и браузера
+func (p *NewsParserUseCase) Stop(ctx context.Context) error {
+	p.Parser.Close()
+	err := p.Browser.Close()
+	return err
+}
+
+// Parse запуск разбора сайта
+func (p *NewsParserUseCase) Parse(ctx context.Context) (err error) {
+	logger := slog.With("func", "NewsParserUseCase.Parse")
+	errs := make([]error, 0)
+	start := time.Now() // запоминаем время старта
+	defer func() {
+		logger.Debug("Время выполнения", "exec_time", time.Since(start))
+	}()
 
 	// проходим по всем новостным страницам сайта
 	for _, path := range p.NewsPath {
-		pageURL, err := p.URL.Parse(path.Href) //формируем URL
+		lastDt, err := p.Repository.GetLastArticleDt(ctx, path.Href)
 		if err != nil {
-			return err
+			logger.Error("Ошибка поиска последнего URL", "error", err)
+			errs = append(errs, err)
+			now := time.Now()
+			lastDt = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		}
-		articles, err := p.Parser.Parse(pageURL) // запускаем парсинг, получаем массив статей
+		logger = slog.With("url", path.Href)
+		pageURL, err := p.URL.Parse(path.Href) //формируем URL для разбора
 		if err != nil {
-			return err
+			logger.Error("Ошибка при разборе URL", "error", err)
+			errs = append(errs, err)
+			continue
 		}
-		articles = articles
-		//fmt.Println(articles)
+		articles, err := p.Parser.Parse(ctx, pageURL, lastDt) // запускаем парсинг, получаем массив статей
+		if err != nil {
+			logger.Error("Ошибка при парсинге URL", "error", err, "url")
+			errs = append(errs, err)
+			continue
+		}
+		err = p.Repository.InsertBatch(ctx, articles) // сохраняем список статей
+		if err != nil {
+			logger.Error("Ошибка при сохранении статей", "error", err)
+			errs = append(errs, err)
+			continue
+		}
 	}
 	// нужно реализовать отправку статей в кафку
-	elapsed := time.Since(start) // считаем разницу
-	fmt.Printf("Время выполнения: %s\n", elapsed)
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return nil
 
 }

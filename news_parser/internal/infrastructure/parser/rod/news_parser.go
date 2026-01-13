@@ -1,16 +1,20 @@
 package rod
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
+	"golang.org/x/net/html"
 	"log"
+	"math/rand"
 	"net/url"
 	"os"
 	dm "stock-news-analysis/news_parser/internal/domain"
 	"stock-news-analysis/news_parser/internal/usecase"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,12 +29,14 @@ func NewNewsParser() *NewsParser {
 	return &NewsParser{rod.New(), make(chan *dm.Article, 10)}
 }
 
-func (p *NewsParser) Run(url string, timeout time.Duration) {
+func (p *NewsParser) Run(ctx context.Context, url string, timeout time.Duration) {
+	fmt.Println("url", url)
 	p.Browser = p.Browser.ControlURL(url).Timeout(timeout).MustConnect()
 }
 
 func (p *NewsParser) Close() {
 	p.Browser.MustClose()
+	p.Browser = nil
 }
 
 //func (p *NewsParser) Parse() error {
@@ -80,35 +86,41 @@ func (p *NewsParser) Close() {
 //
 //}
 
-func (p *NewsParser) Parse(url *url.URL) ([]dm.Article, error) {
+func (p *NewsParser) Parse(ctx context.Context, url *url.URL, lastDt time.Time) ([]dm.Article, error) {
+	rand.Seed(time.Now().UnixNano()) // инициализация генератора
+
 	resArticle := make([]dm.Article, 0)
-	start := time.Now() // запоминаем время старта
-	shortArticleInfo, err := p.parseNewsInfo(url)
+	start := time.Now()                                // запоминаем время старта
+	shortArticleInfo, err := p.parseNewsInfo(ctx, url) //тут получаем короткое описание статей из ленты
 	if err != nil {
 		return nil, err
 	}
-	for _, shortArticle := range shortArticleInfo {
+	for i, shortArticle := range shortArticleInfo {
+		time.Sleep(time.Duration(rand.Intn(4)) * time.Second)
 		articleURL, err := url.Parse(shortArticle.Link)
 		if err != nil {
 			return nil, err
 		}
-		article, err := p.parseArticleInfo(articleURL)
+		article, err := p.parseArticleInfo(ctx, articleURL) // тут уже переходим в статю и парсим ее полную версию
 		if err != nil {
 			return nil, err
 		}
+		article.Body = p.htmlToText(article.Body)
 		resArticle = append(resArticle, *article)
-		fmt.Println(resArticle)
+		fmt.Println(article.Title)
+		if i == 10 {
+			break
+		}
 		//return nil, nil
 	}
-
 	elapsed := time.Since(start) // считаем разницу
 	fmt.Printf("Время выполнения: %s\n", elapsed)
 	return resArticle, nil
-
 }
 
-func (p *NewsParser) parseNewsInfo(url *url.URL) ([]*dm.Article, error) {
-	data, err := p.getPageNewsInfo(url) //получаем информацию о постах
+// parseNewsInfo разбор ленты статей
+func (p *NewsParser) parseNewsInfo(ctx context.Context, url *url.URL) ([]*dm.Article, error) {
+	data, err := p.getPageNewsInfo(ctx, url) //получаем информацию о постах
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +136,9 @@ func (p *NewsParser) parseNewsInfo(url *url.URL) ([]*dm.Article, error) {
 	return shortArticleInfo, nil
 }
 
-func (p *NewsParser) parseArticleInfo(url *url.URL) (*dm.Article, error) {
-	data, err := p.getPageNewsInfo(url) //получаем информацию о постах
+// parseArticleInfo разбор страницы статьи
+func (p *NewsParser) parseArticleInfo(ctx context.Context, url *url.URL) (*dm.Article, error) {
+	data, err := p.getPageNewsInfo(ctx, url) //получаем информацию о постах
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +169,8 @@ func (p *NewsParser) parseArticleInfo(url *url.URL) (*dm.Article, error) {
 	return article, nil
 }
 
-func (p *NewsParser) getPageNewsInfo(url *url.URL) (map[string]interface{}, error) {
+// функция которая парсит из страницы json содержащий массив статей
+func (p *NewsParser) getPageNewsInfo(ctx context.Context, url *url.URL) (map[string]interface{}, error) {
 	//fmt.Println(url.String())
 	page := p.Browser.MustPage(url.String())
 	defer page.MustClose()
@@ -188,4 +202,24 @@ func (p *NewsParser) getPageNewsInfo(url *url.URL) (map[string]interface{}, erro
 	data = data["newsStore"].(map[string]interface{})
 
 	return data, nil
+}
+
+// Функция чистки новости от html тегов
+func (r *NewsParser) htmlToText(htmlStr string) string {
+	doc, err := html.Parse(strings.NewReader(htmlStr))
+	if err != nil {
+		return htmlStr // если не удалось распарсить
+	}
+	var sb strings.Builder
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			sb.WriteString(n.Data)
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+	return strings.TrimSpace(sb.String())
 }
