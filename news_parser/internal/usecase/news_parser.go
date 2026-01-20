@@ -25,13 +25,12 @@ type Browser interface {
 type NewsParser interface {
 	Run(ctx context.Context, url string, timeout time.Duration)
 	Close()
-	Parse(ctx context.Context, url *url.URL, lastDt time.Time) ([]domain.Article, error)
+	Parse(ctx context.Context, url *url.URL, articleIdLast int) ([]domain.Article, error)
 }
 
-type NewsRepository interface {
-	Insert(ctx context.Context, article domain.Article) error
+type NewsParseRepository interface {
 	InsertBatch(ctx context.Context, article []domain.Article) error
-	GetLastArticleDt(ctx context.Context, path string) (time.Time, error)
+	GetLastArticleId(ctx context.Context, path string) (int, error)
 	Close()
 }
 
@@ -40,10 +39,10 @@ type NewsParserUseCase struct {
 	Parser     NewsParser
 	NewsPath   []path
 	URL        *url.URL
-	Repository NewsRepository
+	Repository NewsParseRepository
 }
 
-func NewNewsParserUseCase(b Browser, p NewsParser, r NewsRepository) *NewsParserUseCase {
+func NewNewsParserUseCase(b Browser, p NewsParser, r NewsParseRepository) *NewsParserUseCase {
 
 	newsPath := []path{
 		//PathСырьевые товары", "/news/commodities-news"},
@@ -95,12 +94,12 @@ func (p *NewsParserUseCase) Parse(ctx context.Context) (err error) {
 
 	// проходим по всем новостным страницам сайта
 	for _, path := range p.NewsPath {
-		lastDt, err := p.Repository.GetLastArticleDt(ctx, path.Href)
+		// получаем дату последней статьи для раздела для ограничения парсинга ленты
+		articleIdLast, err := p.Repository.GetLastArticleId(ctx, path.Href)
 		if err != nil {
+			// если не нашли дату то берем начало дня
 			logger.Error("Ошибка поиска последнего URL", "error", err)
 			errs = append(errs, err)
-			now := time.Now()
-			lastDt = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		}
 		logger = slog.With("url", path.Href)
 		pageURL, err := p.URL.Parse(path.Href) //формируем URL для разбора
@@ -109,7 +108,7 @@ func (p *NewsParserUseCase) Parse(ctx context.Context) (err error) {
 			errs = append(errs, err)
 			continue
 		}
-		articles, err := p.Parser.Parse(ctx, pageURL, lastDt) // запускаем парсинг, получаем массив статей
+		articles, err := p.Parser.Parse(ctx, pageURL, articleIdLast) // запускаем парсинг, получаем массив статей
 		if err != nil {
 			logger.Error("Ошибка при парсинге URL", "error", err, "url")
 			errs = append(errs, err)

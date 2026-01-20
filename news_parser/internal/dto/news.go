@@ -1,14 +1,18 @@
 package dto
 
-import "time"
+import (
+	"time"
+)
 
 type ArticleDTO struct {
-	ID           int64     `db:"id"`
-	Source       string    `db:"source"`
-	Category     string    `db:"category"`
-	URL          string    `db:"url"`
-	Data_json    string    `db:"data_json"`
-	Created_dt   time.Time `db:"created_dt"`
-	Published_at time.Time `db:"published_at"`
-	Is_send      bool      `db:"is_send"`
+	ID          int       `db:"id"`
+	Source      string    `db:"source"`
+	Category    string    `db:"category"`
+	ArticleId   int       `db:"article_id"`
+	Title       string    `db:"title"`
+	URL         string    `db:"url"`
+	DataJson    string    `db:"data_json"`
+	CreatedDt   time.Time `db:"created_dt"`
+	PublishedAt time.Time `db:"published_at"`
+	IsSend      bool      `db:"is_send"`
 }

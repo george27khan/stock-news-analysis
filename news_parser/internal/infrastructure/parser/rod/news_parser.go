@@ -8,6 +8,7 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	"golang.org/x/net/html"
 	"log"
+	"log/slog"
 	"math/rand"
 	"net/url"
 	"os"
@@ -86,17 +87,19 @@ func (p *NewsParser) Close() {
 //
 //}
 
-func (p *NewsParser) Parse(ctx context.Context, url *url.URL, lastDt time.Time) ([]dm.Article, error) {
+func (p *NewsParser) Parse(ctx context.Context, url *url.URL, articleIdLast int) ([]dm.Article, error) {
 	rand.Seed(time.Now().UnixNano()) // инициализация генератора
-
 	resArticle := make([]dm.Article, 0)
 	start := time.Now()                                // запоминаем время старта
 	shortArticleInfo, err := p.parseNewsInfo(ctx, url) //тут получаем короткое описание статей из ленты
 	if err != nil {
 		return nil, err
 	}
-	for i, shortArticle := range shortArticleInfo {
-		time.Sleep(time.Duration(rand.Intn(4)) * time.Second)
+	for _, shortArticle := range shortArticleInfo {
+		if shortArticle.Id == articleIdLast {
+			break
+		}
+		//time.Sleep(time.Duration(rand.Intn(4)) * time.Second) //???
 		articleURL, err := url.Parse(shortArticle.Link)
 		if err != nil {
 			return nil, err
@@ -105,13 +108,9 @@ func (p *NewsParser) Parse(ctx context.Context, url *url.URL, lastDt time.Time) 
 		if err != nil {
 			return nil, err
 		}
-		article.Body = p.htmlToText(article.Body)
+		article.Body = p.htmlToText(article.Body) // чистим текст статьи от тегов
 		resArticle = append(resArticle, *article)
-		fmt.Println(article.Title)
-		if i == 10 {
-			break
-		}
-		//return nil, nil
+		slog.Info("article.Title", "article.Title", article.Title)
 	}
 	elapsed := time.Since(start) // считаем разницу
 	fmt.Printf("Время выполнения: %s\n", elapsed)

@@ -24,7 +24,7 @@ func main() {
 	//newsUsecase.Parse(ctx)
 
 	newsUsecase.Run(ctx) //запуск парсера
-	shed := cron.NewScheduler(newsUsecase.Parse, "0 */1 * * * *")
+	shed := cron.NewScheduler(newsUsecase.Parse, "0 */5 * * * *")
 	newsUsecase.Parse(ctx)
 	shed.Start(ctx)
 	select {}
